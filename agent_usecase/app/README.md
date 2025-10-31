@@ -11,3 +11,7 @@ This directory contains the application code organized by responsibility:
 - `tools/`: LangChain tools (accounts, facilities, notes)
 
 Entry point for running the server is `../main.py` (uvicorn uses `app.api.main:app`).
+
+Notes:
+- Conversation memory is in-memory; no database is required.
+- Mock business data is served from `app/data/mock_store.py`.

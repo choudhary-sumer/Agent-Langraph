@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 
-from app.data import get_data_loader
+from app.data.mock_store import mock_store
 
 
 @tool
@@ -33,6 +33,9 @@ def save_notes(
     # Fallback to runnable config
     if not user_id and config and getattr(config, "configurable", None):
         user_id = config.configurable.get("user_id")
+    account_id = None
+    if config and getattr(config, "configurable", None):
+        account_id = config.configurable.get("account_id")
 
     note_id = str(uuid.uuid4())
     current_time = datetime.now().isoformat()
@@ -46,22 +49,24 @@ def save_notes(
         "updated_at": current_time,
     }
 
-    # Save to JSON file using data loader
-    data_loader = get_data_loader()
-    success = data_loader.save_note(user_id, note_data)
+    # Save via mock store under account scope if available
+    saved = None
+    if account_id:
+        saved = mock_store.save_note(account_id, f"{title}: {content}" if title else content)
+    success = saved is not None
 
     if success:
         return {
             "success": True,
             "note_id": note_id,
             "message": f"Note '{title}' saved successfully",
-            "note": note_data,
+            "note": saved or note_data,
         }
     else:
         return {
             "success": False,
             "message": "Failed to save note",
-            "note": note_data,
+            "note": saved or note_data,
         }
 
 
@@ -88,28 +93,17 @@ def fetch_notes(
     # Fallback to runnable config
     if not user_id and config and getattr(config, "configurable", None):
         user_id = config.configurable.get("user_id")
+    account_id = None
+    if config and getattr(config, "configurable", None):
+        account_id = config.configurable.get("account_id")
 
-    data_loader = get_data_loader()
-    user_notes = data_loader.get_notes_by_user_id(user_id)
-
-    if not user_notes:
-        return {"note_overview": [], "message": "No notes found for this user"}
-
-    # Filter by date if provided
-    if date:
-        filtered_notes = [
-            note for note in user_notes if note.get("created_at", "").startswith(date)
-        ]
-    else:
-        filtered_notes = user_notes
-
-    # Sort by created_at (newest first) and limit
-    filtered_notes.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-    limited_notes = filtered_notes[:limit]
+    notes = mock_store.get_notes(account_id=account_id, date=date, last_n=limit)
 
     return {
         "success": True,
-        "note_overview": limited_notes,
-        "total_count": len(limited_notes),
-        "message": f"Retrieved {len(limited_notes)} notes for user {user_id}",
+        "note_overview": notes,
+        "total_count": len(notes),
+        "message": (
+            f"Retrieved {len(notes)} notes for account {account_id}" if account_id else f"Retrieved {len(notes)} notes"
+        ),
     }

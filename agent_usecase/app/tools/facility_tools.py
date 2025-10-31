@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 
-from app.data import get_data_loader
+from app.data.mock_store import mock_store
 
 
 @tool
@@ -34,16 +34,16 @@ def fetch_facility_details(
     if not facility_id and config and getattr(config, "configurable", None):
         facility_id = config.configurable.get("facility_id")
 
-    data_loader = get_data_loader()
-
     if facility_id:
         # Fetch specific facility
-        facility_data = data_loader.get_facility_by_id(facility_id)
+        facility_data = mock_store.get_facility(facility_id)
         if facility_data:
             return {"facility_overview": [facility_data]}
         else:
             return {"facility_overview": []}
     else:
         # Fetch all facilities for the account
-        facilities = data_loader.get_facilities_by_account_id(account_id)
+        facilities = [
+            f for f in mock_store.get_all_facilities() if f.get("account_id") == account_id
+        ]
         return {"facility_overview": facilities}

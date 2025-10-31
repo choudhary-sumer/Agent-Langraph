@@ -46,16 +46,11 @@ app = FastAPI(
 # Initialize database tables on startup
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database tables on startup."""
+    """Startup initialization (silent in in-memory mode)."""
     try:
-        create_tables()
-        print("✅ Database tables initialized successfully")
-    except Exception as e:
-        print(f"⚠️  Warning: Could not initialize database tables: {e}")
-        print(
-            "   The application will continue but conversation memory "
-            "may not work properly."
-        )
+        create_tables()  # no-op in in-memory mode
+    except Exception:
+        pass
 
 
 # Add CORS middleware
@@ -185,43 +180,6 @@ async def cleanup_old_conversations():
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error cleaning up conversations: {str(e)}"
-        )
-
-
-@app.post("/postman", response_model=AgentResponse)
-async def postman_chat(
-    request: AgentRequest, agent=Depends(get_agent_dependency)
-) -> AgentResponse:
-    """
-    Simplified chat endpoint that accepts the same format as /chat.
-
-    This endpoint works with the same AgentRequest model, making it simpler
-    to use with Postman or any other client.
-    """
-    try:
-        # Process the request directly through the agent
-        response = process_agent_request(
-            agent=agent,
-            text=request.text,
-            user_id=request.user_id,
-            account_id=request.account_id,
-            facility_id=request.facility_id,
-            conversation_id=request.conversation_id,
-        )
-
-        return response
-
-    except Exception as e:
-        # Return error response in the same format
-        return AgentResponse(
-            conversation_id=request.conversation_id or "error",
-            final_response=f"Error processing request: {str(e)}",
-            card_key="other",
-            account_overview=[],
-            facility_overview=None,
-            note_overview=[],
-            rewards_overview=None,
-            order_overview=None,
         )
 
 

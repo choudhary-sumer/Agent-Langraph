@@ -1,5 +1,6 @@
 """Agent factory using LangChain's latest create_agent API with structured output."""
 
+import ast
 import json
 from typing import Any, Optional
 
@@ -134,49 +135,148 @@ def process_agent_request(
                     "user_id": user_id,
                     "account_id": account_id,
                     "facility_id": facility_id or "",
-                }
+                },
+                "recursion_limit": 50,
             },
         )
 
         # Attempt to parse a structured JSON response from the final AI message
         response_payload: Optional[dict] = None
-        # Case 1: result has messages list
-        if isinstance(result, dict) and "messages" in result:
-            messages = result["messages"]
-            # Traverse from the end to find the final AI JSON block
-            for msg in reversed(messages):
-                content = getattr(msg, "content", None)
-                # If already a dict-like JSON
-                if isinstance(content, dict):
-                    response_payload = content
-                    break
-                if isinstance(content, str) and content.strip():
+        
+        # Case 1: Check for structured_response in result dict (from create_agent with response_format)
+        if isinstance(result, dict):
+            # Check for structured_response key first
+            if "structured_response" in result:
+                structured = result["structured_response"]
+                if isinstance(structured, dict) and {
+                    "final_response",
+                    "card_key",
+                }.issubset(structured.keys()):
+                    response_payload = structured
+            
+            # Check if result itself is the payload
+            if response_payload is None:
+                keys = set(result.keys())
+                if {"final_response", "card_key"}.issubset(keys):
+                    response_payload = result
+            
+            # Case 1b: result has messages list - look for tool calls and ToolMessages
+            if response_payload is None and "messages" in result:
+                messages = result["messages"]
+                # PRIORITY 1: Check AIMessage tool_calls FIRST (structured data is in tool_call args)
+                for msg in reversed(messages):
+                    msg_type = getattr(msg, "__class__", None).__name__ if hasattr(msg, "__class__") else None
+                    
+                    if msg_type == "AIMessage":
+                        tool_calls = getattr(msg, "tool_calls", None) or []
+                        for tool_call in tool_calls:
+                            # Handle both dict and object tool_call formats
+                            if isinstance(tool_call, dict):
+                                tool_name = tool_call.get("name")
+                                args = tool_call.get("args")
+                            else:
+                                tool_name = getattr(tool_call, "name", None)
+                                args = getattr(tool_call, "args", None)
+                            
+                            if tool_name == "AgentResponse":
+                                # Extract args from tool call - this is the structured response
+                                if isinstance(args, dict) and {
+                                    "final_response",
+                                    "card_key",
+                                }.issubset(args.keys()):
+                                    response_payload = args
+                                    break
+                        
+                        if response_payload:
+                            break
+                
+                # PRIORITY 2: If not found in tool_calls, check ToolMessage
+                if response_payload is None:
+                    for msg in reversed(messages):
+                        msg_type = getattr(msg, "__class__", None).__name__ if hasattr(msg, "__class__") else None
+                        
+                        # Check ToolMessage for AgentResponse tool result
+                        if msg_type == "ToolMessage":
+                            tool_name = getattr(msg, "name", None)
+                            if tool_name == "AgentResponse":
+                                content = getattr(msg, "content", None)
+                                if isinstance(content, str):
+                                    # Try to parse JSON from ToolMessage content
+                                    try:
+                                        # Remove prefix if present (e.g., "Returning structured response: ")
+                                        clean_content = content
+                                        if ":" in content and content.count("{") > 0:
+                                            # Find the dict part after colon
+                                            colon_idx = content.find(":")
+                                            if colon_idx >= 0:
+                                                dict_part = content[colon_idx + 1:].strip()
+                                                if dict_part.startswith("{") or dict_part.startswith("'"):
+                                                    clean_content = dict_part
+                                        
+                                        # Try to parse as JSON or Python dict string
+                                        if clean_content.startswith("{") or clean_content.startswith("'"):
+                                            # Try ast.literal_eval first (handles Python dict strings)
+                                            try:
+                                                parsed = ast.literal_eval(clean_content)
+                                                if isinstance(parsed, dict) and {
+                                                    "final_response",
+                                                    "card_key",
+                                                }.issubset(parsed.keys()):
+                                                    response_payload = parsed
+                                                    break
+                                            except (ValueError, SyntaxError):
+                                                pass
+                                            
+                                            # Try JSON parsing
+                                            try:
+                                                parsed = json.loads(clean_content)
+                                                if isinstance(parsed, dict) and {
+                                                    "final_response",
+                                                    "card_key",
+                                                }.issubset(parsed.keys()):
+                                                    response_payload = parsed
+                                                    break
+                                            except json.JSONDecodeError:
+                                                pass
+                                    except Exception:
+                                        continue
+                        
+                        if response_payload:
+                            break
+
+        # Case 2: direct AIMessage (if result is not a dict)
+        if response_payload is None and isinstance(result, AIMessage):
+            # Check tool_calls first
+            tool_calls = getattr(result, "tool_calls", None) or []
+            for tool_call in tool_calls:
+                tool_name = tool_call.get("name") if isinstance(tool_call, dict) else getattr(tool_call, "name", None)
+                if tool_name == "AgentResponse":
+                    args = tool_call.get("args") if isinstance(tool_call, dict) else getattr(tool_call, "args", None)
+                    if isinstance(args, dict) and {
+                        "final_response",
+                        "card_key",
+                    }.issubset(args.keys()):
+                        response_payload = args
+                        break
+            
+            # Check content
+            if response_payload is None:
+                if isinstance(result.content, dict):
+                    if {
+                        "final_response",
+                        "card_key",
+                    }.issubset(result.content.keys()):
+                        response_payload = result.content
+                elif isinstance(result.content, str):
                     try:
-                        candidate = json.loads(content)
-                        if isinstance(candidate, dict) and {
+                        response_payload = json.loads(result.content)
+                        if not isinstance(response_payload, dict) or not {
                             "final_response",
                             "card_key",
-                        }.issubset(candidate.keys()):
-                            response_payload = candidate
-                            break
+                        }.issubset(response_payload.keys()):
+                            response_payload = None
                     except json.JSONDecodeError:
-                        continue
-
-        # Case 2: the result itself looks like the payload
-        if response_payload is None and isinstance(result, dict):
-            keys = set(result.keys())
-            if {"final_response", "card_key"}.issubset(keys):
-                response_payload = result
-
-        # Case 3: direct AIMessage
-        if response_payload is None and isinstance(result, AIMessage):
-            if isinstance(result.content, dict):
-                response_payload = result.content
-            elif isinstance(result.content, str):
-                try:
-                    response_payload = json.loads(result.content)
-                except json.JSONDecodeError:
-                    pass
+                        pass
 
         # Absolute fallback to plain text
         if response_payload is None:

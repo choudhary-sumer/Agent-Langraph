@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 
-from app.data import get_data_loader
+from app.data.mock_store import mock_store
 
 
 @tool
@@ -26,8 +26,7 @@ def fetch_account_details(
     if not account_id and config and getattr(config, "configurable", None):
         account_id = config.configurable.get("account_id")
 
-    data_loader = get_data_loader()
-    account_data = data_loader.get_account_by_id(account_id)
+    account_data = mock_store.get_account(account_id)
 
     if account_data:
         return {"account_overview": [account_data]}
