@@ -6,8 +6,6 @@ from app.models.response_models import (
     AgentResponse,
     FacilityOverview,
     NoteOverview,
-    OrderOverview,
-    RewardsOverview,
 )
 
 __all__ = [
@@ -16,6 +14,4 @@ __all__ = [
     "AccountOverview",
     "FacilityOverview",
     "NoteOverview",
-    "RewardsOverview",
-    "OrderOverview",
 ]

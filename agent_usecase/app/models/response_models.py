@@ -81,30 +81,6 @@ class NoteOverview(BaseModel):
     updated_at: datetime
 
 
-class RewardsOverview(BaseModel):
-    """Rewards overview data model."""
-
-    current_tier: str
-    next_tier: str
-    points_to_next_tier: int
-    total_points: int
-    points_earned_this_quarter: int
-    quarter_end_date: datetime
-    free_vials_available: int
-    rewards_required_for_next_free_vial: int
-    rewards_redeemed_towards_next_free_vial: int
-
-
-class OrderOverview(BaseModel):
-    """Order overview data model."""
-
-    order_id: str
-    status: str
-    total_amount: float
-    created_at: datetime
-    items: List[dict]
-
-
 class AgentResponse(BaseModel):
     """Main response model for agent interactions."""
 
@@ -118,8 +94,6 @@ class AgentResponse(BaseModel):
     account_overview: List[AccountOverview] = Field(default_factory=list)
     facility_overview: Optional[List[FacilityOverview]] = None
     note_overview: List[NoteOverview] = Field(default_factory=list)
-    rewards_overview: Optional[RewardsOverview] = None
-    order_overview: Optional[List[OrderOverview]] = None
 
     class Config:
         json_schema_extra = {
@@ -130,7 +104,5 @@ class AgentResponse(BaseModel):
                 "account_overview": [],
                 "facility_overview": None,
                 "note_overview": [],
-                "rewards_overview": None,
-                "order_overview": None,
             }
         }

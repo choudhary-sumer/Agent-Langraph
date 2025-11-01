@@ -45,8 +45,6 @@ The agent returns structured responses with:
 - `account_overview`: Account details array
 - `facility_overview`: Facility details array
 - `note_overview`: Notes array
-- `rewards_overview`: Rewards information
-- `order_overview`: Order information
 
 ## Setup
 
@@ -55,34 +53,18 @@ The agent returns structured responses with:
    pip install -r requirements.txt
    ```
 
-2. **Set up PostgreSQL Database**:
-   ```bash
-   # Install PostgreSQL (Ubuntu/Debian)
-   sudo apt-get install postgresql postgresql-contrib
-   
-   # Start PostgreSQL service
-   sudo systemctl start postgresql
-   sudo systemctl enable postgresql
-   
-   # Create database and user
-   sudo -u postgres createdb agent_poc_db
-   sudo -u postgres createuser --interactive
-   # Follow prompts to create a user with password
-   
-   # Grant privileges
-   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE agent_poc_db TO your_username;"
-   ```
+2. **Database setup**: Not required.
+   - The app now runs entirely in in-memory mode for conversations and uses `app/data/mock_store.py` for mock data.
+   - You can skip any PostgreSQL installation or migration steps.
 
 3. **Set Environment Variables**:
    ```bash
    cp env.example .env
-   # Edit .env with your OpenAI API key and database credentials
+   # Edit .env with your OpenAI API key
+   # Only OPENAI_API_KEY is required (database settings are not used)
    ```
 
-4. **Initialize Database Tables**:
-   ```bash
-   python init_database.py
-   ```
+4. **Initialize**: No database initialization required - the app runs in in-memory mode.
 
 5. **Run the Application**:
    ```bash
@@ -98,8 +80,7 @@ The agent returns structured responses with:
 
 - `GET /` - Root endpoint
 - `GET /health` - Health check
-- `POST /chat` - Chat with the agent
-- `POST /postman` - Alternative endpoint (same format as /chat)
+- `POST /chat` - **Main endpoint for all tool testing** (accounts, facilities, notes)
 - `GET /conversations/{conversation_id}` - Get conversation info
 - `DELETE /conversations/{conversation_id}` - Delete conversation
 - `GET /conversations` - List all conversations
@@ -107,19 +88,19 @@ The agent returns structured responses with:
 
 ## Data Structure
 
-The application now uses JSON files for mock data storage:
+The application uses in-memory mock data storage:
 
-- `app/data/account_data.json` - Account information
-- `app/data/facility_data.json` - Facility information  
-- `app/data/notes_data.json` - User notes data
+- **Mock Data Store**: `app/data/mock_store.py` - Centralized in-memory storage for accounts, facilities, and notes
+- **Conversation Memory**: In-memory storage (no database required)
+- **Mock Data**: Pre-seeded with sample accounts, facilities, and notes for testing
 
-All tools now read from and write to these JSON files instead of using hardcoded data.
+All tools read from and write to the mock store. Conversation memory is maintained in-memory during the server session.
 
 ## Example Usage
 
 ### API Request Format
 
-Both `/chat` and `/postman` endpoints use the same request format:
+The `/chat` endpoint accepts the following request format:
 
 **Account Overview Request:**
 ```json
@@ -189,22 +170,18 @@ Once the server is running, visit:
 
 ## Configuration
 
-The application can be configured through environment variables:
+The application can be configured through environment variables in `.env`:
 
 ### Application Settings
-- `OPENAI_API_KEY`: Your OpenAI API key (required)
+- `OPENAI_API_KEY`: Your OpenAI API key **(required)**
 - `MODEL_NAME`: Model to use (default: gpt-4o-mini)
-- `DEBUG`: Enable debug mode (default: True)
+- `DEBUG`: Enable debug mode (default: false)
+- `HOST`: Server host (default: 0.0.0.0)
+- `PORT`: Server port (default: 8000)
+- `WORKERS`: Number of workers (default: 1)
+- `RELOAD`: Enable auto-reload (default: false)
 
-### Database Settings
-- `DATABASE_URL`: Complete PostgreSQL connection string (optional)
-- `DB_HOST`: Database host (default: localhost)
-- `DB_PORT`: Database port (default: 5432)
-- `DB_NAME`: Database name (default: agent_poc_db)
-- `DB_USER`: Database username (default: username)
-- `DB_PASSWORD`: Database password (default: password)
-
-If `DATABASE_URL` is provided, it will be used instead of the individual database settings.
+**Note**: No database configuration is needed. The application runs entirely in-memory for both conversation memory and mock data.
 
 ## Development
 
@@ -218,7 +195,10 @@ The codebase follows a modular architecture:
 
 ## Notes
 
-- The application uses mock data for demonstration purposes
-- In production, replace mock data with actual API calls
+- **Mock Data**: The application uses in-memory mock data from `mock_store.py` for testing
+- **No Database**: All data (conversations and business data) is stored in-memory during the session
+- **Testing**: Use the `/chat` endpoint for all tool testing (account, facility, notes operations)
+- **Conversation ID**: Omit `conversation_id` in the first request to get one auto-generated, then use it for multi-turn conversations
+- **Production**: In production, replace mock data with actual API calls and implement persistent storage
 - Configure CORS settings appropriately for your frontend
 - Set up proper logging and monitoring for production use

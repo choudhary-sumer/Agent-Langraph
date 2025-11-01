@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 
 from app.memory import get_conversation_memory
 from app.models.response_models import AgentResponse
-from app.prompts.agent_prompts import get_response_schema
+from app.prompts.agent_prompts import get_agent_prompt
 from app.tools import (
     fetch_account_details,
     fetch_facility_details,
@@ -42,16 +42,15 @@ def create_agent_instance(openai_api_key: str, model_name: str = "gpt-4o-mini") 
     tools = [fetch_account_details, fetch_facility_details, save_notes, fetch_notes]
 
     # Get the prompt template
-    from app.prompts import get_agent_prompt
-
     prompt = get_agent_prompt()
 
     # Create agent using the latest create_agent API
+    # Pass the Pydantic class directly for structured output
     agent = create_agent(
         model=llm,
         tools=tools,
         system_prompt=prompt.format_messages()[0].content,
-        response_format=get_response_schema(),
+        response_format=AgentResponse,
     )
 
     return agent
@@ -290,8 +289,6 @@ def process_agent_request(
                 account_overview=[],
                 facility_overview=None,
                 note_overview=[],
-                rewards_overview=None,
-                order_overview=None,
             )
 
         # Ensure conversation_id is set
@@ -320,8 +317,6 @@ def process_agent_request(
                 account_overview=account_overview,
                 facility_overview=facility_overview,
                 note_overview=note_overview,
-                rewards_overview=response_payload.get("rewards_overview"),
-                order_overview=response_payload.get("order_overview"),
             )
 
     except Exception as e:
@@ -341,6 +336,4 @@ def process_agent_request(
             account_overview=[],
             facility_overview=None,
             note_overview=[],
-            rewards_overview=None,
-            order_overview=None,
         )
